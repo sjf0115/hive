@@ -229,6 +229,7 @@ public class CliDriver {
 
     if (proc != null) {
       if (proc instanceof IDriver) {
+        // Driver 命令处理器
         IDriver qp = (IDriver) proc;
         PrintStream out = ss.out;
         long start = System.currentTimeMillis();
@@ -284,17 +285,21 @@ public class CliDriver {
         console.printInfo(
             "Time taken: " + timeTaken + " seconds" + (counter == 0 ? "" : ", Fetched: " + counter + " row(s)"));
       } else {
+        // 非 Driver 命令处理器
+        // 命令 cmd 根据 \\s+ 拆分成词条 获取第一个词条
         String firstToken = tokenizeCmd(cmd.trim())[0];
+        // 实际执行命令
         String cmd_1 = getFirstCmd(cmd.trim(), firstToken.length());
-
+        // 如果设置了 -v 选项，打印命令
         if (ss.getIsVerbose()) {
           ss.out.println(firstToken + " " + cmd_1);
         }
+        // 调用各自命令处理器的 run 方法实际处理命令
         CommandProcessorResponse res = proc.run(cmd_1);
         if (res.getResponseCode() != 0) {
-          ss.out
-              .println("Query returned non-zero code: " + res.getResponseCode() + ", cause: " + res.getErrorMessage());
+          ss.out.println("Query returned non-zero code: " + res.getResponseCode() + ", cause: " + res.getErrorMessage());
         }
+        // 在控制台打印输出信息
         if (res.getConsoleMessages() != null) {
           for (String consoleMsg : res.getConsoleMessages()) {
             console.printInfo(consoleMsg);
