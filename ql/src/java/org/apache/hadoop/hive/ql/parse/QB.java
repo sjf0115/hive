@@ -47,11 +47,14 @@ public class QB {
   private final int numGbys = 0;
   private int numSels = 0;
   private int numSelDi = 0;
+  // 表的别名
   private HashMap<String, String> aliasToTabs;
+  // 子查询别名与QBExpr的关系
   private HashMap<String, QBExpr> aliasToSubq;
   private HashMap<String, Table> viewAliasToViewSchema;
   private HashMap<String, Map<String, String>> aliasToProps;
   private List<String> aliases;
+  // 保存 QueryBlock 相关的解析信息
   private QBParseInfo qbp;
   private QBMetaData qbm;
   private QBJoinTree qbjoin;

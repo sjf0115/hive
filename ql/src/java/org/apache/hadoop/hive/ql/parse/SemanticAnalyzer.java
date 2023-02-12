@@ -1565,6 +1565,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     QBParseInfo qbp = qb.getParseInfo();
     boolean skipRecursion = false;
 
+    // 核心逻辑处理
     if (ast.getToken() != null) {
       skipRecursion = true;
       switch (ast.getToken().getType()) {
@@ -1894,11 +1895,12 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       }
     }
 
+    // 是否跳过递归
     if (!skipRecursion) {
-      // Iterate over the rest of the children
+      // 迭代遍历子节点
       int child_count = ast.getChildCount();
       for (int child_pos = 0; child_pos < child_count && phase1Result; ++child_pos) {
-        // Recurse
+        // 递归遍历子节点
         phase1Result = phase1Result && doPhase1(
             (ASTNode)ast.getChild(child_pos), qb, ctx_1, plannerCtx);
       }
@@ -11959,6 +11961,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     }
   }
 
+  // 生成解析树
   boolean genResolvedParseTree(ASTNode ast, PlannerContext plannerCtx) throws SemanticException {
     ASTNode child = ast;
     this.ast = ast;
@@ -11968,9 +11971,9 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     // 1. analyze and process the position alias
     // step processPositionAlias out of genResolvedParseTree
 
-    // 2. analyze create table command
+    // 2. 分析建表命令
     if (ast.getToken().getType() == HiveParser.TOK_CREATETABLE) {
-      // if it is not CTAS, we don't need to go further and just return
+      // 如果不是 CTAS 语句(CREATE TABLE ... AS SELECT ...) 直接返回
       if ((child = analyzeCreateTable(ast, qb, plannerCtx)) == null) {
         return false;
       }
@@ -11978,11 +11981,10 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       queryState.setCommandType(HiveOperation.QUERY);
     }
 
-    // 3. analyze create view command
+    // 3. 分析创建视图命令
     if (ast.getToken().getType() == HiveParser.TOK_CREATEVIEW ||
         ast.getToken().getType() == HiveParser.TOK_CREATE_MATERIALIZED_VIEW ||
-        (ast.getToken().getType() == HiveParser.TOK_ALTERVIEW &&
-            ast.getChild(1).getType() == HiveParser.TOK_QUERY)) {
+        (ast.getToken().getType() == HiveParser.TOK_ALTERVIEW && ast.getChild(1).getType() == HiveParser.TOK_QUERY)) {
       child = analyzeCreateView(ast, qb, plannerCtx);
       if (child == null) {
         return false;
@@ -12021,7 +12023,10 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     tableMask = new TableMask(this, conf, ctx.isSkipTableMasking());
 
     // 4. continue analyzing from the child ASTNode.
+    // 继续分析子树
+    // 初始化操作比较简单，只是简单的创建一个包含两个字段（dest 和 nextNum）的 Phase1Ctx 对象
     Phase1Ctx ctx_1 = initPhase1Ctx();
+    // 核心操作交最终由 doPhase1 来完成。doPhase1 主要是递归遍历 AST，并进行语义检查
     if (!doPhase1(child, qb, ctx_1, plannerCtx)) {
       // if phase1Result false return
       return false;
@@ -12119,23 +12124,28 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     }
   }
 
+  // TODO 语义分析
   void analyzeInternal(ASTNode ast, PlannerContextFactory pcf) throws SemanticException {
     LOG.info("Starting Semantic Analysis");
+    // TODO 1. 生成解析树
     // 1. Generate Resolved Parse tree from syntax tree
     boolean needsTransform = needsTransform();
-    //change the location of position alias process here
+    // 将 GroupBy 和 OrderBy 中的位置别名替换为名称
     processPositionAlias(ast);
     PlannerContext plannerCtx = pcf.create();
+    // 生成解析树
     if (!genResolvedParseTree(ast, plannerCtx)) {
       return;
     }
 
+    // 如果子查询或者视图中 Order/SortBy 没有 LIMIT 将被移除
     if (HiveConf.getBoolVar(conf, ConfVars.HIVE_REMOVE_ORDERBY_IN_SUBQUERY)) {
       for (String alias : qb.getSubqAliases()) {
         removeOBInSubQuery(qb.getSubqForAlias(alias));
       }
     }
 
+    // 检查查询结果是否缓存 如果先前执行的查询的结果会被缓存，那么再次执行相同的查询时会复用缓存的查询结果
     // Check query results cache.
     // If no masking/filtering required, then we can check the cache now, before
     // generating the operator tree and going through CBO.
@@ -12149,9 +12159,12 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       }
     }
 
+    // 创建 AST 副本
     ASTNode astForMasking;
     if (isCBOExecuted() && needsTransform &&
         (qb.isCTAS() || qb.isView() || qb.isMaterializedView() || qb.isMultiDestQuery())) {
+      // 如果开启 CBO 优化并应用 Masking/Filtering 屏蔽过滤策略，则需要创建一个 AST 的副本。
+      // 原因是生成 Operator 树的过程中可能会修改原始的 AST，但如果需要第二次解析，则需要解析未修改的 AST
       // If we use CBO and we may apply masking/filtering policies, we create a copy of the ast.
       // The reason is that the generation of the operator tree may modify the initial ast,
       // but if we need to parse for a second time, we would like to parse the unmodified ast.
@@ -12160,6 +12173,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       astForMasking = ast;
     }
 
+    // TODO 2. 生成 Operator 树
     // 2. Gen OP Tree from resolved Parse Tree
     Operator sinkOp = genOPTree(ast, plannerCtx);
 
@@ -13174,7 +13188,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       }
     }
 
-    // Handle different types of CREATE TABLE command
+    // 处理不同的 CREATE TABLE 命令
     // Note: each branch must call addDbAndTabToOutputs after finalizing table properties.
 
     switch (command_type) {
@@ -13531,7 +13545,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     }
   }
 
-  // Process the position alias in GROUPBY and ORDERBY
+  // 位置别名替换为名称
   public void processPositionAlias(ASTNode ast) throws SemanticException {
     boolean isBothByPos = HiveConf.getBoolVar(conf, ConfVars.HIVE_GROUPBY_ORDERBY_POSITION_ALIAS);
     boolean isGbyByPos = isBothByPos
@@ -13554,7 +13568,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       ASTNode groupbyNode = null;
       ASTNode orderbyNode = null;
 
-      // get node type
+      // 根据节点类型获取 SELECT 节点、GroupBy 节点以及 OrderBy 节点
       int child_count = next.getChildCount();
       for (int child_pos = 0; child_pos < child_count; ++child_pos) {
         ASTNode node = (ASTNode) next.getChild(child_pos);
@@ -13571,16 +13585,16 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       if (selectNode != null) {
         int selectExpCnt = selectNode.getChildCount();
 
-        // replace each of the position alias in GROUPBY with the actual column name
+        // 1. 处理 GroupBy 中位置别名 用实际的列名替换
         if (groupbyNode != null) {
           for (int child_pos = 0; child_pos < groupbyNode.getChildCount(); ++child_pos) {
             ASTNode node = (ASTNode) groupbyNode.getChild(child_pos);
             if (node.getToken().getType() == HiveParser.Number) {
+              // 是否开启 hive.groupby.position.alias
               if (isGbyByPos) {
                 int pos = Integer.parseInt(node.getText());
                 if (pos > 0 && pos <= selectExpCnt) {
-                  groupbyNode.setChild(child_pos,
-                      selectNode.getChild(pos - 1).getChild(0));
+                  groupbyNode.setChild(child_pos, selectNode.getChild(pos - 1).getChild(0));
                 } else {
                   throw new SemanticException(
                       ErrorMsg.INVALID_POSITION_ALIAS_IN_GROUPBY.getMsg(
@@ -13595,10 +13609,10 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
           }
         }
 
-        // replace each of the position alias in ORDERBY with the actual column name,
+        // 2. 处理 OrderBy 中位置别名 用实际的列名替换
+        // 如果开启 CBO 优化 OrderBy 中的位置别名需要在生成执行计划中处理
         // if cbo is enabled, orderby position will be processed in genPlan
-        if (!HiveConf.getBoolVar(conf, HiveConf.ConfVars.HIVE_CBO_ENABLED)
-            && orderbyNode != null) {
+        if (!HiveConf.getBoolVar(conf, HiveConf.ConfVars.HIVE_CBO_ENABLED) && orderbyNode != null) {
           isAllCol = false;
           for (int child_pos = 0; child_pos < selectNode.getChildCount(); ++child_pos) {
             ASTNode node = (ASTNode) selectNode.getChild(child_pos).getChild(0);
@@ -13616,6 +13630,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
               }
             }
             if (node != null && node.getToken().getType() == HiveParser.Number) {
+              // 是否开启 hive.orderby.position.alias
               if (isObyByPos) {
                 if (!isAllCol) {
                   int pos = Integer.parseInt(node.getText());

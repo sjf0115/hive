@@ -613,6 +613,7 @@ public class Driver implements IDriver {
 
       ASTNode tree;
       try {
+        // TODO 将 HQL 命令转换为语法树 ASTNode
         tree = ParseUtils.parse(command, ctx);
       } catch (ParseException e) {
         parseError = true;
@@ -648,7 +649,7 @@ public class Driver implements IDriver {
         tree =  hookRunner.runPreAnalyzeHooks(hookCtx, tree);
       }
 
-      // Do semantic analysis and plan generation
+      // TODO 获取语义分析器 Do semantic analysis and plan generation
       BaseSemanticAnalyzer sem = SemanticAnalyzerFactory.get(queryState, tree);
 
       if (!retrial) {
@@ -656,6 +657,7 @@ public class Driver implements IDriver {
         generateValidTxnList();
       }
 
+      // TODO 语义分析
       sem.analyze(tree, ctx);
 
       if (executeHooks) {
